@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from plagdetect.corpus import load_corpus
@@ -27,6 +28,126 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Plagiarism Detector", version="0.0.1", lifespan=_lifespan)
+
+
+_PAGE = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plagiarism Detector</title>
+<style>
+  body { font-family: sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  textarea { width: 100%; box-sizing: border-box; }
+  mark { background: #ffe066; }
+  pre { white-space: pre-wrap; word-break: break-word; border: 1px solid #ddd;
+        padding: .75rem; border-radius: 4px; }
+  #status { color: #c00; min-height: 1.4em; }
+  h2 { margin-top: 1.5rem; font-size: 1rem; }
+</style>
+</head>
+<body>
+<h1>Plagiarism Detector</h1>
+<form id="form">
+  <textarea id="text" rows="12" placeholder="Paste the text you want to check…"></textarea>
+  <br><button type="submit" style="margin-top:.5rem">Check</button>
+</form>
+<p id="status"></p>
+<div id="results"></div>
+
+<script>
+const MAX_CHARS = """ + str(_MAX_TEXT_CHARS) + """;
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = document.getElementById("text").value;
+  const status = document.getElementById("status");
+  const results = document.getElementById("results");
+
+  if (!text.trim()) {
+    status.textContent = "Please enter some text first.";
+    results.innerHTML = "";
+    return;
+  }
+  if (text.length > MAX_CHARS) {
+    status.textContent = "Input is too long (limit: " + MAX_CHARS.toLocaleString() + " characters).";
+    results.innerHTML = "";
+    return;
+  }
+
+  status.textContent = "Checking…";
+  results.innerHTML = "";
+
+  let data;
+  try {
+    const resp = await fetch("/check", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text}),
+    });
+    if (resp.status === 422) {
+      status.textContent = "Input rejected by the server (too long or invalid).";
+      return;
+    }
+    if (!resp.ok) {
+      status.textContent = "Server error (" + resp.status + "). Please try again.";
+      return;
+    }
+    data = await resp.json();
+  } catch (err) {
+    status.textContent = "Network error — is the server reachable?";
+    return;
+  }
+
+  status.textContent = "";
+  if (!data.matches.length) {
+    results.textContent = "No matches found.";
+    return;
+  }
+
+  for (const m of data.matches) {
+    const section = document.createElement("section");
+
+    const h2 = document.createElement("h2");
+    h2.textContent =
+      m.source.title + " — " + (m.score * 100).toFixed(1) + "% containment";
+    section.appendChild(h2);
+
+    const pre = document.createElement("pre");
+    // highlightSpans mirrors app/render.py:render_html — walk spans in order,
+    // escape plain text, wrap matched regions in <mark>.
+    pre.innerHTML = highlightSpans(text, m.spans);
+    section.appendChild(pre);
+
+    results.appendChild(section);
+  }
+});
+
+function highlightSpans(text, spans) {
+  let html = "";
+  let cursor = 0;
+  const sorted = [...spans].sort((a, b) => a.start - b.start);
+  for (const s of sorted) {
+    if (s.start > cursor) html += esc(text.slice(cursor, s.start));
+    html += "<mark>" + esc(text.slice(s.start, s.end)) + "</mark>";
+    cursor = s.end;
+  }
+  if (cursor < text.length) html += esc(text.slice(cursor));
+  return html;
+}
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+</script>
+</body>
+</html>
+"""
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    return _PAGE
 
 
 @app.get("/health")
