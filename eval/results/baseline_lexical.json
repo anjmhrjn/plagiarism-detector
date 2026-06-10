@@ -1,0 +1,227 @@
+{
+  "meta": {
+    "timestamp": "2026-06-10T18:20:09.672307+00:00",
+    "entry_point": "plagdetect.detect.detect(query_text, corpus, k=5, top_k=len(corpus))",
+    "normalize_text_called_on_query": false,
+    "pipeline_note": "normalize_text() runs at corpus-build time (stored in corpus 'canonical' field). Query path: shingle() → tokenize() + canonical() (NFC+lowercase per token). /check follows the same path.",
+    "flag_threshold": 0.5,
+    "corpus_path": "data/corpus.jsonl",
+    "corpus_doc_id_field": "id",
+    "fixture_path": "eval/fixtures/paraphrase_seed.jsonl",
+    "corpus_size": 100,
+    "fixture_size": 16,
+    "label_counts": {
+      "verbatim": 4,
+      "light_edit": 3,
+      "paraphrase": 4,
+      "negative_offtopic": 2,
+      "negative_same_topic": 3
+    },
+    "phase": "BEFORE — lexical baseline; embeddings layer not yet built"
+  },
+  "per_query": [
+    {
+      "id": "verbatim_01",
+      "label": "verbatim",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:2701",
+      "true_source_rank": 1,
+      "true_source_score": 1.0,
+      "top1_score": 1.0,
+      "top1_doc_id": "gutenberg:2701"
+    },
+    {
+      "id": "verbatim_02",
+      "label": "verbatim",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:84",
+      "true_source_rank": 1,
+      "true_source_score": 1.0,
+      "top1_score": 1.0,
+      "top1_doc_id": "gutenberg:84"
+    },
+    {
+      "id": "verbatim_03",
+      "label": "verbatim",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:1513",
+      "true_source_rank": 1,
+      "true_source_score": 1.0,
+      "top1_score": 1.0,
+      "top1_doc_id": "gutenberg:1513"
+    },
+    {
+      "id": "verbatim_04",
+      "label": "verbatim",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:1342",
+      "true_source_rank": 1,
+      "true_source_score": 0.980392,
+      "top1_score": 0.980392,
+      "top1_doc_id": "gutenberg:1342"
+    },
+    {
+      "id": "light_edit_01",
+      "label": "light_edit",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:2701",
+      "true_source_rank": 1,
+      "true_source_score": 0.791667,
+      "top1_score": 0.791667,
+      "top1_doc_id": "gutenberg:2701"
+    },
+    {
+      "id": "light_edit_02",
+      "label": "light_edit",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:84",
+      "true_source_rank": 1,
+      "true_source_score": 0.782609,
+      "top1_score": 0.782609,
+      "top1_doc_id": "gutenberg:84"
+    },
+    {
+      "id": "light_edit_03",
+      "label": "light_edit",
+      "paraphrase_type": null,
+      "source_doc_id": "gutenberg:1513",
+      "true_source_rank": 1,
+      "true_source_score": 0.761905,
+      "top1_score": 0.761905,
+      "top1_doc_id": "gutenberg:1513"
+    },
+    {
+      "id": "para_01",
+      "label": "paraphrase",
+      "paraphrase_type": "synonym_swap",
+      "source_doc_id": "gutenberg:2701",
+      "true_source_rank": 1,
+      "true_source_score": 0.090909,
+      "top1_score": 0.090909,
+      "top1_doc_id": "gutenberg:2701"
+    },
+    {
+      "id": "para_02",
+      "label": "paraphrase",
+      "paraphrase_type": "clause_reorder",
+      "source_doc_id": "gutenberg:84",
+      "true_source_rank": 4,
+      "true_source_score": 0.0,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "para_03",
+      "label": "paraphrase",
+      "paraphrase_type": "voice_change",
+      "source_doc_id": "gutenberg:1513",
+      "true_source_rank": 5,
+      "true_source_score": 0.0,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "para_04",
+      "label": "paraphrase",
+      "paraphrase_type": "sentence_split_join",
+      "source_doc_id": "gutenberg:1342",
+      "true_source_rank": 3,
+      "true_source_score": 0.0,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "neg_offtopic_01",
+      "label": "negative_offtopic",
+      "paraphrase_type": null,
+      "source_doc_id": null,
+      "true_source_rank": null,
+      "true_source_score": null,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "neg_offtopic_02",
+      "label": "negative_offtopic",
+      "paraphrase_type": null,
+      "source_doc_id": null,
+      "true_source_rank": null,
+      "true_source_score": null,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "neg_sametopic_01",
+      "label": "negative_same_topic",
+      "paraphrase_type": null,
+      "source_doc_id": null,
+      "true_source_rank": null,
+      "true_source_score": null,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "neg_sametopic_02",
+      "label": "negative_same_topic",
+      "paraphrase_type": null,
+      "source_doc_id": null,
+      "true_source_rank": null,
+      "true_source_score": null,
+      "top1_score": 0.0,
+      "top1_doc_id": "gutenberg:58169"
+    },
+    {
+      "id": "neg_sametopic_03",
+      "label": "negative_same_topic",
+      "paraphrase_type": null,
+      "source_doc_id": null,
+      "true_source_rank": null,
+      "true_source_score": null,
+      "top1_score": 0.020833,
+      "top1_doc_id": "gutenberg:27558"
+    }
+  ],
+  "rollup": {
+    "verbatim": {
+      "n": 4,
+      "mean_rank": 1,
+      "worst_rank": 1,
+      "mean_score": 0.9951,
+      "not_found": 0
+    },
+    "light_edit": {
+      "n": 3,
+      "mean_rank": 1,
+      "worst_rank": 1,
+      "mean_score": 0.7787,
+      "not_found": 0
+    },
+    "paraphrase": {
+      "n": 4,
+      "mean_rank": 3.25,
+      "worst_rank": 5,
+      "mean_score": 0.0227,
+      "not_found": 0
+    },
+    "negative_offtopic": {
+      "n": 2,
+      "mean_top1_score": 0.0,
+      "max_top1_score": 0.0
+    },
+    "negative_same_topic": {
+      "n": 3,
+      "mean_top1_score": 0.0069,
+      "max_top1_score": 0.0208
+    }
+  },
+  "prf1": {
+    "threshold": 0.5,
+    "tp": 7,
+    "fp": 0,
+    "fn": 4,
+    "tn": 5,
+    "precision": 1.0,
+    "recall": 0.6364,
+    "f1": 0.7778
+  }
+}
