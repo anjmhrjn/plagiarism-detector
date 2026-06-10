@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .shingles import shingle
 from .similarity import containment, jaccard
 
@@ -7,21 +9,44 @@ def detect(
     corpus: list[dict],
     k: int = 5,
     top_k: int = 5,
+    semantic_index=None,
 ) -> list[dict]:
+    """
+    Two-channel plagiarism detector.  Entry point shared by /check and the
+    eval harness.
+
+    LEXICAL CHANNEL (always runs, unchanged):
+        n-gram shingling → containment (primary score) + Jaccard.
+
+    SEMANTIC CHANNEL (runs when semantic_index is not None):
+        SemanticIndex.query() → cosine similarity per chunk → best score per
+        source_doc_id.  Results are UNIONed with the lexical results by
+        source_doc_id; both scores are attached to every candidate.
+        No score fusion: scores remain independent.
+
+    Sort: containment descending (lexical primary).  Returns top_k results.
+    Every result carries 'semantic_score' (float | None).
+    """
     query_shingles = shingle(query_text, k)
-    results = []
+    by_id: dict[str, dict] = {}
     for doc in corpus:
         doc_shingles = shingle(doc["canonical"], k)
         c = containment(query_shingles, doc_shingles)
         j = jaccard(query_shingles, doc_shingles)
-        results.append(
-            {
-                "id": doc["id"],
-                "title": doc["title"],
-                "containment": c,
-                "jaccard": j,
-            }
-        )
+        by_id[doc["id"]] = {
+            "id": doc["id"],
+            "title": doc["title"],
+            "containment": c,
+            "jaccard": j,
+            "semantic_score": None,
+        }
+
+    if semantic_index is not None:
+        for r in semantic_index.query(raw_query=query_text, top_k=len(corpus)):
+            if r["doc_id"] in by_id:
+                by_id[r["doc_id"]]["semantic_score"] = r["semantic_score"]
+
+    results = list(by_id.values())
     results.sort(key=lambda x: x["containment"], reverse=True)
     return results[:top_k]
 

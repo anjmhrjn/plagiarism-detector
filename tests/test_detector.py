@@ -160,9 +160,10 @@ class TestDetect:
         results = detect(_DOC1_CANONICAL, CORPUS, k=5, top_k=1)
         assert len(results) == 1
         r = results[0]
-        assert set(r.keys()) == {"id", "title", "containment", "jaccard"}
+        assert set(r.keys()) == {"id", "title", "containment", "jaccard", "semantic_score"}
         assert 0.0 <= r["containment"] <= 1.0
         assert 0.0 <= r["jaccard"] <= 1.0
+        assert r["semantic_score"] is None  # no semantic_index passed
 
     def test_empty_query_returns_zero_scores(self):
         results = detect("", CORPUS, k=5, top_k=3)

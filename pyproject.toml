@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
+    "sentence-transformers>=3.0",
+    "faiss-cpu>=1.7",
 ]
 
 [project.optional-dependencies]

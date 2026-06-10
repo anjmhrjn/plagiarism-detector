@@ -10,24 +10,38 @@ from plagdetect.detect import detect
 from plagdetect.detect.spans import extract_spans
 
 _CORPUS_PATH = Path("data/corpus.jsonl")
+_SEMANTIC_INDEX_DIR = Path("data/semantic_index")
 _CORPUS: list[dict] = []
 _CORPUS_INDEX: dict[str, str] = {}
+_SEMANTIC_INDEX = None  # SemanticIndex | None; None means lexical-only mode
 
 # ~100 KB — enough for any real document, blocks trivially large payloads
 _MAX_TEXT_CHARS = 100_000
 
+# Minimum cosine similarity for a semantic-only hit (no lexical overlap) to
+# appear in /check results.  Not a fusion weight — scores remain independent.
+_SEM_INCLUDE_THRESHOLD = 0.40
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    global _CORPUS, _CORPUS_INDEX
+    global _CORPUS, _CORPUS_INDEX, _SEMANTIC_INDEX
     # Guard lets tests pre-inject a corpus before the lifespan runs.
     if not _CORPUS and _CORPUS_PATH.exists():
         _CORPUS = load_corpus(_CORPUS_PATH)
         _CORPUS_INDEX = {d["id"]: d["canonical"] for d in _CORPUS}
+
+    if _SEMANTIC_INDEX is None and _SEMANTIC_INDEX_DIR.exists():
+        try:
+            from plagdetect.detect.semantic import load_index
+            _SEMANTIC_INDEX = load_index(_SEMANTIC_INDEX_DIR)
+        except Exception as exc:
+            import sys
+            print(f"WARNING: semantic index not loaded: {exc}", file=sys.stderr)
     yield
 
 
-app = FastAPI(title="Plagiarism Detector", version="0.0.1", lifespan=_lifespan)
+app = FastAPI(title="Plagiarism Detector", version="0.0.2", lifespan=_lifespan)
 
 
 _PAGE = """\
@@ -44,6 +58,7 @@ _PAGE = """\
         padding: .75rem; border-radius: 4px; }
   #status { color: #c00; min-height: 1.4em; }
   h2 { margin-top: 1.5rem; font-size: 1rem; }
+  .scores { font-size: .85rem; color: #555; margin-bottom: .25rem; }
 </style>
 </head>
 <body>
@@ -113,6 +128,15 @@ document.getElementById("form").addEventListener("submit", async (e) => {
       m.source.title + " — " + (m.score * 100).toFixed(1) + "% containment";
     section.appendChild(h2);
 
+    const scores = document.createElement("p");
+    scores.className = "scores";
+    const lexStr = "lexical: " + (m.lexical_score * 100).toFixed(1) + "%";
+    const semStr = m.semantic_score != null
+      ? "  semantic: " + (m.semantic_score * 100).toFixed(1) + "%"
+      : "";
+    scores.textContent = lexStr + semStr;
+    section.appendChild(scores);
+
     const pre = document.createElement("pre");
     // highlightSpans mirrors app/render.py:render_html — walk spans in order,
     // escape plain text, wrap matched regions in <mark>.
@@ -168,7 +192,9 @@ class _SpanOut(BaseModel):
 
 class _MatchOut(BaseModel):
     source: dict  # {id, title}
-    score: float
+    score: float  # = lexical_score (containment); kept for backward compatibility
+    lexical_score: float
+    semantic_score: float | None
     spans: list[_SpanOut]
 
 
@@ -181,18 +207,32 @@ def check(body: _CheckBody) -> _CheckResponse:
     if not _CORPUS:
         return _CheckResponse(matches=[])
 
-    raw = detect(body.text, _CORPUS, k=5, top_k=5)
-    matches = []
+    # Run both channels through the shared detect() entry point.
+    # top_k=len(_CORPUS) so semantic-only hits (containment=0) aren't cut off
+    # before the union filter below.  Lexical computation is O(corpus) anyway.
+    raw = detect(body.text, _CORPUS, k=5, top_k=len(_CORPUS), semantic_index=_SEMANTIC_INDEX)
+
+    matches: list[_MatchOut] = []
     for m in raw:
-        if m["containment"] == 0.0:
+        is_lex = m["containment"] > 0.0
+        is_sem = _SEMANTIC_INDEX is not None and (m["semantic_score"] or 0.0) >= _SEM_INCLUDE_THRESHOLD
+        if not is_lex and not is_sem:
             continue
+
         canonical = _CORPUS_INDEX.get(m["id"], "")
-        spans = extract_spans(body.text, canonical, k=5) if canonical else []
+        # Spans come from the lexical channel only; semantic matches show no highlights.
+        spans = extract_spans(body.text, canonical, k=5) if canonical and is_lex else []
+
         matches.append(
             _MatchOut(
                 source={"id": m["id"], "title": m["title"]},
                 score=m["containment"],
+                lexical_score=m["containment"],
+                semantic_score=m["semantic_score"],
                 spans=[_SpanOut(**s) for s in spans],
             )
         )
+        if len(matches) >= 5:
+            break
+
     return _CheckResponse(matches=matches)

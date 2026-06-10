@@ -80,8 +80,11 @@ class TestCheckEndpoint:
         resp = client.post("/check", json={"text": query})
         assert resp.status_code == 200
         for m in resp.json()["matches"]:
-            assert {"source", "score", "spans"} == set(m.keys())
+            assert {"source", "score", "lexical_score", "semantic_score", "spans"} == set(m.keys())
             assert {"id", "title"} == set(m["source"].keys())
             assert isinstance(m["score"], float)
+            assert isinstance(m["lexical_score"], float)
+            # semantic_score is None when index not loaded; float otherwise
+            assert m["semantic_score"] is None or isinstance(m["semantic_score"], float)
             for s in m["spans"]:
                 assert {"start", "end", "text"} == set(s.keys())
