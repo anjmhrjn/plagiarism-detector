@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -8,6 +12,9 @@ from pydantic import BaseModel, Field
 from plagdetect.corpus import load_corpus
 from plagdetect.detect import detect
 from plagdetect.detect.spans import extract_spans
+from plagdetect.judge import judge_pair
+
+_log = logging.getLogger(__name__)
 
 _CORPUS_PATH = Path("data/corpus.jsonl")
 _SEMANTIC_INDEX_DIR = Path("data/semantic_index")
@@ -196,10 +203,37 @@ class _MatchOut(BaseModel):
     lexical_score: float
     semantic_score: float | None
     spans: list[_SpanOut]
+    judge: dict | None  # structured verdict from LLM judge; None when judge is unavailable
 
 
 class _CheckResponse(BaseModel):
     matches: list[_MatchOut]
+
+
+def _judge_passage(query_text: str, canonical: str, m: dict, is_lex: bool) -> str:
+    """
+    Pick the source passage to send to the judge based on which channel flagged the candidate.
+
+    Lexical hit  → reverse extract_spans to find the matching region in the source,
+                   then widen by ±500 chars so the judge sees the full edited passage.
+    Semantic-only → use the chunk offsets from the semantic index directly.
+    """
+    if is_lex and canonical:
+        source_spans = extract_spans(canonical, query_text, k=5)
+        if source_spans:
+            span_start = min(s["start"] for s in source_spans)
+            span_end = max(s["end"] for s in source_spans)
+            ctx_start = max(0, span_start - 500)
+            ctx_end = min(len(canonical), span_end + 500)
+            return canonical[ctx_start:ctx_end]
+
+    # Semantic chunk (precise offset from the index).
+    char_start = m.get("chunk_char_start")
+    char_end = m.get("chunk_char_end")
+    if char_start is not None and char_end is not None and canonical:
+        return canonical[char_start:char_end]
+
+    return canonical[:2000]
 
 
 @app.post("/check", response_model=_CheckResponse)
@@ -220,7 +254,30 @@ def check(body: _CheckBody) -> _CheckResponse:
             continue
 
         canonical = _CORPUS_INDEX.get(m["id"], "")
-        # Spans come from the lexical channel only; semantic matches show no highlights.
+        candidate_chunk = _judge_passage(body.text, canonical, m, is_lex)
+
+        # LLM judge: decides whether the query is actually DERIVED from this candidate.
+        # Runs only on this post-retrieval flagged subset — never against the full corpus.
+        verdict = judge_pair(
+            body.text,
+            candidate_chunk,
+            lexical_score=m["containment"],
+            semantic_score=m["semantic_score"],
+        )
+
+        if verdict["error"] is not None:
+            # Judge unavailable (no key, API error). Fall back to provisional rule
+            # so the endpoint remains usable without an OpenAI key.
+            _log.warning("judge unavailable for %s, falling back to provisional flag: %s", m["id"], verdict["error"])
+            is_derived = is_lex or is_sem
+        else:
+            # Judge verdict is authoritative — replaces the provisional either-channel rule.
+            is_derived = verdict["is_derived"]
+
+        if not is_derived:
+            continue
+
+        # Spans come from the lexical channel only; semantic-only matches show no highlights.
         spans = extract_spans(body.text, canonical, k=5) if canonical and is_lex else []
 
         matches.append(
@@ -230,6 +287,7 @@ def check(body: _CheckBody) -> _CheckResponse:
                 lexical_score=m["containment"],
                 semantic_score=m["semantic_score"],
                 spans=[_SpanOut(**s) for s in spans],
+                judge=verdict,
             )
         )
         if len(matches) >= 5:

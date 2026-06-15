@@ -39,12 +39,18 @@ def detect(
             "containment": c,
             "jaccard": j,
             "semantic_score": None,
+            "chunk_char_start": None,
+            "chunk_char_end": None,
+            "chunk_idx": None,
         }
 
     if semantic_index is not None:
         for r in semantic_index.query(raw_query=query_text, top_k=len(corpus)):
             if r["doc_id"] in by_id:
                 by_id[r["doc_id"]]["semantic_score"] = r["semantic_score"]
+                by_id[r["doc_id"]]["chunk_char_start"] = r["char_start"]
+                by_id[r["doc_id"]]["chunk_char_end"] = r["char_end"]
+                by_id[r["doc_id"]]["chunk_idx"] = r["chunk_idx"]
 
     results = list(by_id.values())
     results.sort(key=lambda x: x["containment"], reverse=True)
